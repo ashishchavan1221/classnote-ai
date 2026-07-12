@@ -329,8 +329,58 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
             return self.send_json(list_tasks_for_user(user))
 
         else:
-            self.send_response(404)
-            self.end_headers()
+            # Serve frontend static files from frontend/dist
+            frontend_dist = os.path.abspath(os.path.join(BACKEND_DIR, "..", "frontend", "dist"))
+            
+            # Clean path to prevent traversal vulnerabilities
+            normalized_path = path.lstrip("/")
+            file_path = os.path.abspath(os.path.join(frontend_dist, normalized_path))
+            
+            # Prevent path traversal
+            if not file_path.startswith(frontend_dist):
+                self.send_response(403)
+                self.end_headers()
+                return
+                
+            # React Router SPA routing fallback
+            if not os.path.exists(file_path) or os.path.isdir(file_path):
+                file_path = os.path.join(frontend_dist, "index.html")
+                
+            if not os.path.exists(file_path):
+                self.send_response(404)
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"Frontend not built. Please run npm run build in the frontend directory.")
+                return
+                
+            # Content type mappings
+            content_type = "text/html"
+            if file_path.endswith(".js"):
+                content_type = "application/javascript"
+            elif file_path.endswith(".css"):
+                content_type = "text/css"
+            elif file_path.endswith(".png"):
+                content_type = "image/png"
+            elif file_path.endswith(".jpg") or file_path.endswith(".jpeg"):
+                content_type = "image/jpeg"
+            elif file_path.endswith(".svg"):
+                content_type = "image/svg+xml"
+            elif file_path.endswith(".ico"):
+                content_type = "image/x-icon"
+            elif file_path.endswith(".json"):
+                content_type = "application/json"
+                
+            try:
+                with open(file_path, "rb") as f:
+                    self.send_response(200)
+                    self.send_header("Content-Type", content_type)
+                    if not file_path.endswith("index.html"):
+                        self.send_header("Cache-Control", "public, max-age=31536000")
+                    self.end_headers()
+                    self.wfile.write(f.read())
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
 
     def do_POST(self):
         path = urlparse(self.path).path

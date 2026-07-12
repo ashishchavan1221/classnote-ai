@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+const isDev = window.location.port === "5173";
+const API_BASE = import.meta.env.VITE_API_URL || (isDev ? "http://127.0.0.1:8000/api" : (window.location.origin + "/api"));
 
 const getHeaders = () => {
   const token = localStorage.getItem("token");
@@ -170,9 +171,9 @@ export const api = {
   },
 
   getMeetingSocketUrl(meetingId) {
-    const base = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
-    const wsProto = base.startsWith("https") ? "wss" : "ws";
-    const domain = base.replace(/^https?:\/\//, "").replace(/\/api$/, "");
-    return `${wsProto}://${domain}/api/meetings/${meetingId}/websocket`;
+    const isDev = window.location.port === "5173";
+    const wsProto = window.location.protocol === "https:" ? "wss" : "ws";
+    const host = isDev ? "127.0.0.1:8000" : window.location.host;
+    return `${wsProto}://${host}/api/meetings/${meetingId}/websocket`;
   }
 };
