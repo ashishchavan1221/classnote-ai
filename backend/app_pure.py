@@ -65,6 +65,49 @@ def write_json_db(data):
     except Exception as e:
         print(f"Error writing local DB: {e}")
 
+# Auto-seed demo users if they don't exist
+def seed_demo_users():
+    teacher_user = {
+        "id": "teacher_demo_id_12345678",
+        "name": "Professor Jane",
+        "email": "teacher@classnote.com",
+        "password": "password123",
+        "role": "teacher",
+        "institution": "ClassNote Academy",
+        "connectedApps": {
+            "notion": {"token": None, "databaseId": None},
+            "jira": {"host": None, "email": None, "token": None, "projectKey": None}
+        }
+    }
+    student_user = {
+        "id": "student_demo_id_87654321",
+        "name": "Alex Student",
+        "email": "student@classnote.com",
+        "password": "password123",
+        "role": "student",
+        "institution": "ClassNote Academy",
+        "connectedApps": {
+            "notion": {"token": None, "databaseId": None},
+            "jira": {"host": None, "email": None, "token": None, "projectKey": None}
+        }
+    }
+    
+    if use_mongodb:
+        try:
+            mongo_db.users.update_one({"email": teacher_user["email"]}, {"$set": teacher_user}, upsert=True)
+            mongo_db.users.update_one({"email": student_user["email"]}, {"$set": student_user}, upsert=True)
+            print("[Seeder] Successfully verified/seeded demo users in MongoDB Atlas.")
+        except Exception as seed_err:
+            print(f"[Seeder] MongoDB Atlas seeding failed: {seed_err}")
+    else:
+        db = read_json_db()
+        db["users"][teacher_user["id"]] = teacher_user
+        db["users"][student_user["id"]] = student_user
+        write_json_db(db)
+        print("[Seeder] Successfully verified/seeded demo users in local JSON database.")
+
+seed_demo_users()
+
 # MongoDB Helper CRUD wrappers
 def get_user(user_id):
     if use_mongodb:
