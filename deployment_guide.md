@@ -37,6 +37,7 @@ Fill in the deployment form with the following settings:
 ### 3. Configure Environment Variables
 1. Scroll down the configuration page and click the **`Advanced`** button.
 2. Click **`Add Environment Variable`** and input the following key-value pairs:
+   * **Key:** `PYTHON_VERSION` | **Value:** `3.11.9`
    * **Key:** `GEMINI_API_KEY` | **Value:** `[YOUR_GEMINI_API_KEY_HERE]`
    * **Key:** `MONGODB_URI` | **Value:** `[YOUR_MONGODB_URI_HERE]`
    * **Key:** `MONGO_DB_NAME` | **Value:** `meeting_notes_db`
