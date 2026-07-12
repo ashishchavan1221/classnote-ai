@@ -24,7 +24,7 @@ Fill in the deployment form with the following settings:
 * **Runtime:** `Python 3`
 * **Build Command:** Copy and paste this exact command:
   ```bash
-  npm --prefix frontend install && npm --prefix frontend run build && pip install -r backend/requirements.txt
+  npm --prefix frontend install --legacy-peer-deps && npm --prefix frontend run build && pip install -r backend/requirements.txt
   ```
 * **Start Command:** Copy and paste this exact command:
   ```bash
