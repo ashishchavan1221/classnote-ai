@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Patrick+Hand&family=Caveat:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+  }
+}
+
+/* Notebook paper simulation styling */
+.notebook-paper {
+  background: #ffffff;
+  background-image: linear-gradient(rgba(224, 242, 254, 0.9) 1px, transparent 1px);
+  background-size: 100% 1.8rem;
+  line-height: 1.8rem;
+  position: relative;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.notebook-margin-line {
+  position: absolute;
+  top: 0;
+  left: 2.75rem;
+  width: 2px;
+  height: 100%;
+  background-color: rgba(252, 165, 165, 0.85); /* soft red */
+}
+
+/* Pulsing visual cues */
+@keyframes pulse-record {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.15);
+  }
+}
+
+.recording-pulse {
+  animation: pulse-record 2s infinite ease-in-out;
+}
+
+/* Floating custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

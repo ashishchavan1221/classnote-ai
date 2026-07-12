@@ -1,0 +1,23 @@
+# Python cache
+**/__pycache__/
+**/*.pyc
+
+# Node / frontend build
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# Environment configurations containing credentials (secrets)
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
+
+# Local storage and scratch directories
+storage/
+scratch/
+.agents/
+.gemini/
+.DS_Store
+Thumbs.db
