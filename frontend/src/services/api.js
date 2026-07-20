@@ -13,6 +13,17 @@ const getHeaders = () => {
 };
 
 export const api = {
+  // Status check
+  async getStatus() {
+    try {
+      const res = await fetch(`${API_BASE}/status`);
+      if (!res.ok) return { use_mongodb: false, mongodb_configured: false };
+      return await res.json();
+    } catch (e) {
+      return { use_mongodb: false, mongodb_configured: false };
+    }
+  },
+
   // Authentication
   async register(name, email, password, role, institution) {
     const res = await fetch(`${API_BASE}/auth/register`, {

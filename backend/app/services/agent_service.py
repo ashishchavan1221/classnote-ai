@@ -208,9 +208,21 @@ async def run_agent_notes_tasks(meeting_id: str, transcript: str, rag_context: s
             logger.info("Calling Gemini API...")
             import google.generativeai as genai
             genai.configure(api_key=settings.GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content(prompt)
-            llm_response = response.text
+            candidate_models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"]
+            last_err = None
+            for model_name in candidate_models:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content(prompt)
+                    if response and response.text:
+                        llm_response = response.text
+                        break
+                except Exception as err:
+                    last_err = err
+                    logger.warning(f"Gemini model {model_name} failed: {err}")
+            if not llm_response and last_err:
+                raise last_err
+
         elif settings.OPENAI_API_KEY:
             logger.info("Calling OpenAI API...")
             from openai import OpenAI

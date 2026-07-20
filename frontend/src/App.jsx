@@ -416,9 +416,24 @@ const LandingPage = () => {
 const RegisterPage = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("student"); // "student" | "teacher"
   const [formData, setFormData] = useState({ name: "", email: "", password: "", role: "student", institution: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [dbStatus, setDbStatus] = useState({ use_mongodb: false, mongodb_configured: false });
+
+  useEffect(() => {
+    const fetchDbStatus = async () => {
+      const status = await api.getStatus();
+      setDbStatus(status);
+    };
+    fetchDbStatus();
+  }, []);
+
+  const handleTabChange = (role) => {
+    setActiveTab(role);
+    setFormData(prev => ({ ...prev, role }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -434,6 +449,33 @@ const RegisterPage = () => {
     }
   };
 
+  const renderDbStatusPill = () => {
+    if (dbStatus.use_mongodb) {
+      return (
+        <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>MongoDB Atlas Connected</span>
+        </div>
+      );
+    } else if (dbStatus.mongodb_configured) {
+      return (
+        <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-red-500/10 border border-red-500/30 text-red-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+          <span>MongoDB Atlas Offline</span>
+        </div>
+      );
+    } else {
+      return (
+        <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+          <span>Local JSON DB Fallback</span>
+        </div>
+      );
+    }
+  };
+
+  const themeColor = activeTab === "student" ? "emerald" : "brand";
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
@@ -441,12 +483,40 @@ const RegisterPage = () => {
           <BookOpen className="h-9 w-9 text-brand-400" />
           <span className="font-bold text-2xl tracking-wider">ClassNote AI</span>
         </Link>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-white">Create your account</h2>
+        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-white">
+          Create your account
+        </h2>
+        <div className="mt-3 flex justify-center">{renderDbStatusPill()}</div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-slate-800 py-8 px-4 shadow-xl rounded-2xl sm:px-10 border border-slate-700/50">
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          
+          {/* Tab selector for Student / Teacher */}
+          <div className="flex bg-slate-900 p-1 rounded-xl mb-6 border border-slate-700">
+            <button
+              onClick={() => handleTabChange("student")}
+              className={`flex-1 text-center py-2.5 rounded-lg text-xs font-bold transition duration-200 ${
+                activeTab === "student"
+                  ? "bg-emerald-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              🎓 Student Section
+            </button>
+            <button
+              onClick={() => handleTabChange("teacher")}
+              className={`flex-1 text-center py-2.5 rounded-lg text-xs font-bold transition duration-200 ${
+                activeTab === "teacher"
+                  ? "bg-brand-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              💼 Teacher Section
+            </button>
+          </div>
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
             {error && (
               <div className="bg-red-950/40 border border-red-900 text-red-200 p-3.5 rounded-xl text-sm font-medium">
                 ⚠️ {error}
@@ -454,12 +524,16 @@ const RegisterPage = () => {
             )}
             
             <div>
-              <label className="block text-sm font-medium text-slate-300">Name</label>
+              <label className="block text-sm font-medium text-slate-300">
+                {activeTab === "student" ? "Student Name" : "Teacher Name"}
+              </label>
               <input
                 type="text"
                 required
-                className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
-                placeholder="Full Name"
+                className={`mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 sm:text-sm ${
+                  activeTab === "student" ? "focus:ring-emerald-500 focus:border-emerald-500" : "focus:ring-brand-500 focus:border-brand-500"
+                }`}
+                placeholder={activeTab === "student" ? "Full Name" : "Professor / Mentor Name"}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
@@ -470,7 +544,9 @@ const RegisterPage = () => {
               <input
                 type="email"
                 required
-                className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
+                className={`mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 sm:text-sm ${
+                  activeTab === "student" ? "focus:ring-emerald-500 focus:border-emerald-500" : "focus:ring-brand-500 focus:border-brand-500"
+                }`}
                 placeholder="you@school.edu"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -482,41 +558,36 @@ const RegisterPage = () => {
               <input
                 type="password"
                 required
-                className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
+                className={`mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 sm:text-sm ${
+                  activeTab === "student" ? "focus:ring-emerald-500 focus:border-emerald-500" : "focus:ring-brand-500 focus:border-brand-500"
+                }`}
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300">Role</label>
-                <select
-                  className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                >
-                  <option value="student">Student</option>
-                  <option value="teacher">Teacher / Mentor</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300">Institution</label>
-                <input
-                  type="text"
-                  className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
-                  placeholder="Optional"
-                  value={formData.institution}
-                  onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300">Institution / School Name</label>
+              <input
+                type="text"
+                className={`mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 sm:text-sm ${
+                  activeTab === "student" ? "focus:ring-emerald-500 focus:border-emerald-500" : "focus:ring-brand-500 focus:border-brand-500"
+                }`}
+                placeholder="e.g. Stanford University"
+                value={formData.institution}
+                onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
+              />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-3 px-4 rounded-xl border border-transparent text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 shadow-lg hover:shadow-brand-500/20 transition duration-150"
+              className={`w-full flex justify-center py-3 px-4 rounded-xl border border-transparent text-sm font-semibold text-white shadow-lg transition duration-150 ${
+                activeTab === "student"
+                  ? "bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500 hover:shadow-emerald-500/20"
+                  : "bg-brand-600 hover:bg-brand-500 focus:ring-brand-500 hover:shadow-brand-500/20"
+              }`}
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign Up"}
             </button>
@@ -524,7 +595,7 @@ const RegisterPage = () => {
 
           <p className="mt-6 text-center text-sm text-slate-400">
             Already registered?{" "}
-            <Link to="/login" className="font-semibold text-brand-400 hover:text-brand-300">
+            <Link to="/login" className={`font-semibold ${activeTab === "student" ? "text-emerald-400 hover:text-emerald-300" : "text-brand-400 hover:text-brand-300"}`}>
               Sign In
             </Link>
           </p>
@@ -534,28 +605,70 @@ const RegisterPage = () => {
   );
 };
 
-// -------------------------------------------------------------
-// Login Page
-// -------------------------------------------------------------
 const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("student"); // "student" | "teacher"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [dbStatus, setDbStatus] = useState({ use_mongodb: false, mongodb_configured: false });
+  const [portalAlert, setPortalAlert] = useState("");
+
+  useEffect(() => {
+    const fetchDbStatus = async () => {
+      const status = await api.getStatus();
+      setDbStatus(status);
+    };
+    fetchDbStatus();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setPortalAlert("");
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/dashboard");
+      // Fetch details to check role matching
+      const userProfile = await api.getMe();
+      if (userProfile.role !== activeTab) {
+        setPortalAlert(`Note: You logged into the ${activeTab === "student" ? "Student" : "Teacher"} portal, but your account is registered as a ${userProfile.role === "student" ? "Student" : "Teacher"}. Redirecting you to the correct sections...`);
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 2000);
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err) {
       setError(err.message || "Invalid credentials");
-    } finally {
       setLoading(false);
+    }
+  };
+
+  const renderDbStatusPill = () => {
+    if (dbStatus.use_mongodb) {
+      return (
+        <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>MongoDB Atlas Connected</span>
+        </div>
+      );
+    } else if (dbStatus.mongodb_configured) {
+      return (
+        <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-red-500/10 border border-red-500/30 text-red-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+          <span>MongoDB Atlas Offline</span>
+        </div>
+      );
+    } else {
+      return (
+        <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+          <span>Local JSON DB Fallback</span>
+        </div>
+      );
     }
   };
 
@@ -566,15 +679,49 @@ const LoginPage = () => {
           <BookOpen className="h-9 w-9 text-brand-400" />
           <span className="font-bold text-2xl tracking-wider">ClassNote AI</span>
         </Link>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-white">Sign in to your dashboard</h2>
+        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-white">
+          Sign in to your portal
+        </h2>
+        <div className="mt-3 flex justify-center">{renderDbStatusPill()}</div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-slate-800 py-8 px-4 shadow-xl rounded-2xl sm:px-10 border border-slate-700/50">
+          
+          {/* Tab selector for Student / Teacher Portal */}
+          <div className="flex bg-slate-900 p-1 rounded-xl mb-6 border border-slate-700">
+            <button
+              onClick={() => setActiveTab("student")}
+              className={`flex-1 text-center py-2.5 rounded-lg text-xs font-bold transition duration-200 ${
+                activeTab === "student"
+                  ? "bg-emerald-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              🎓 Student Portal
+            </button>
+            <button
+              onClick={() => setActiveTab("teacher")}
+              className={`flex-1 text-center py-2.5 rounded-lg text-xs font-bold transition duration-200 ${
+                activeTab === "teacher"
+                  ? "bg-brand-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              💼 Teacher Portal
+            </button>
+          </div>
+
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className="bg-red-950/40 border border-red-900 text-red-200 p-3.5 rounded-xl text-sm font-medium">
                 ⚠️ {error}
+              </div>
+            )}
+            
+            {portalAlert && (
+              <div className="bg-blue-950/40 border border-blue-950 text-blue-200 p-3.5 rounded-xl text-xs font-medium animate-pulse">
+                ℹ️ {portalAlert}
               </div>
             )}
             
@@ -583,7 +730,9 @@ const LoginPage = () => {
               <input
                 type="email"
                 required
-                className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
+                className={`mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 sm:text-sm ${
+                  activeTab === "student" ? "focus:ring-emerald-500 focus:border-emerald-500" : "focus:ring-brand-500 focus:border-brand-500"
+                }`}
                 placeholder="you@school.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -595,7 +744,9 @@ const LoginPage = () => {
               <input
                 type="password"
                 required
-                className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
+                className={`mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 sm:text-sm ${
+                  activeTab === "student" ? "focus:ring-emerald-500 focus:border-emerald-500" : "focus:ring-brand-500 focus:border-brand-500"
+                }`}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -605,7 +756,11 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-3 px-4 rounded-xl border border-transparent text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 shadow-lg hover:shadow-brand-500/20 transition duration-150"
+              className={`w-full flex justify-center py-3 px-4 rounded-xl border border-transparent text-sm font-semibold text-white shadow-lg transition duration-150 ${
+                activeTab === "student"
+                  ? "bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500 hover:shadow-emerald-500/20"
+                  : "bg-brand-600 hover:bg-brand-500 focus:ring-brand-500 hover:shadow-brand-500/20"
+              }`}
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign In"}
             </button>
@@ -613,7 +768,7 @@ const LoginPage = () => {
 
           <p className="mt-6 text-center text-sm text-slate-400">
             Need an account?{" "}
-            <Link to="/register" className="font-semibold text-brand-400 hover:text-brand-300">
+            <Link to="/register" className={`font-semibold ${activeTab === "student" ? "text-emerald-400 hover:text-emerald-300" : "text-brand-400 hover:text-brand-300"}`}>
               Register Free
             </Link>
           </p>

@@ -16,6 +16,8 @@ MONGODB_URI = "mongodb://localhost:27017"
 MONGO_DB_NAME = "meeting_notes_db"
 GEMINI_API_KEY = ""
 
+mongodb_configured = False
+
 if os.path.exists(ENV_FILE):
     try:
         with open(ENV_FILE, "r") as f:
@@ -24,6 +26,9 @@ if os.path.exists(ENV_FILE):
                     key, val = line.strip().split("=", 1)
                     if key.strip() == "MONGODB_URI":
                         MONGODB_URI = val.strip()
+                        # If customized, set configured flag
+                        if MONGODB_URI and MONGODB_URI != "mongodb://localhost:27017":
+                            mongodb_configured = True
                     elif key.strip() == "MONGO_DB_NAME":
                         MONGO_DB_NAME = val.strip()
                     elif key.strip() == "GEMINI_API_KEY":
@@ -31,18 +36,92 @@ if os.path.exists(ENV_FILE):
     except Exception as e:
         print(f"[Database] Error parsing env file: {e}")
 
-# Connect to MongoDB Atlas
+def get_gemini_api_key():
+    key = os.environ.get("GEMINI_API_KEY", GEMINI_API_KEY)
+    if os.path.exists(ENV_FILE):
+        try:
+            with open(ENV_FILE, "r") as f:
+                for line in f:
+                    if "=" in line and not line.strip().startswith("#"):
+                        k, v = line.strip().split("=", 1)
+                        if k.strip() == "GEMINI_API_KEY":
+                            val = v.strip()
+                            if val:
+                                key = val
+        except Exception:
+            pass
+    return key
+
+def call_gemini_with_fallback(prompt_or_parts):
+    key = get_gemini_api_key()
+    if not key:
+        raise ValueError("No GEMINI_API_KEY found")
+    import google.generativeai as genai
+    genai.configure(api_key=key)
+    candidate_models = [
+        "gemini-3.5-flash",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-flash-latest",
+        "gemini-1.5-flash"
+    ]
+    last_err = None
+    for model_name in candidate_models:
+        try:
+            m = genai.GenerativeModel(model_name)
+            res = m.generate_content(prompt_or_parts)
+            if res and res.text:
+                return res.text
+        except Exception as err:
+            last_err = err
+            print(f"[Gemini] Candidate model '{model_name}' failed: {err}")
+    raise last_err or Exception("All Gemini candidate models failed")
+
+mongo_client = None
+mongo_db = None
+use_mongodb = False
+connection_error_message = ""
+
+def check_mongodb_connection():
+    global mongo_client, mongo_db, use_mongodb, connection_error_message
+    try:
+        if not mongo_client:
+            mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=3000)
+        # Simple check to see if database connection is alive
+        mongo_client.admin.command('ping')
+        mongo_db = mongo_client[MONGO_DB_NAME]
+        use_mongodb = True
+        connection_error_message = ""
+        return True
+    except Exception as e:
+        use_mongodb = False
+        connection_error_message = str(e)
+        return False
+
+# Initial connection check
 print(f"[Database] Connecting to MongoDB at {MONGODB_URI}...")
-try:
-    mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
-    # Simple check to see if database connection is alive
-    mongo_client.admin.command('ping')
-    mongo_db = mongo_client[MONGO_DB_NAME]
-    use_mongodb = True
+check_mongodb_connection()
+if use_mongodb:
     print(f"[Database] Successfully connected to MongoDB Atlas. Database: {MONGO_DB_NAME}")
-except Exception as e:
-    use_mongodb = False
-    print(f"[Database] MongoDB Atlas connection failed. Falling back to local JSON database. Error: {e}")
+else:
+    if mongodb_configured:
+        print(f"[Database] WARNING: MongoDB Atlas connection failed. Error: {connection_error_message}")
+        print("[Database] Backend will require a successful reconnection for registration/login operations.")
+    else:
+        print("[Database] MongoDB Atlas not configured or not running. Operating in local JSON fallback mode.")
+
+def ensure_db_ready(handler_instance):
+    global use_mongodb
+    if mongodb_configured:
+        if not use_mongodb:
+            check_mongodb_connection()
+        if not use_mongodb:
+            handler_instance.send_error_json(
+                f"MongoDB connection failed. Please ensure your internet is connected and your IP is whitelisted on MongoDB Atlas. Details: {connection_error_message}",
+                503
+            )
+            return False
+    return True
 
 # Fallback Local JSON DB Config
 DB_FILE = os.path.join(BACKEND_DIR, "storage", "db.json")
@@ -140,27 +219,47 @@ def get_user_by_email(email):
                 return u
         return None
 
+def sanitize_note_sections(sections):
+    if not sections or not get_gemini_api_key():
+        return sections
+    sanitized = []
+    for section in sections:
+        sec_copy = dict(section)
+        bullets = sec_copy.get("bullets", [])
+        clean_bullets = [b for b in bullets if not (isinstance(b, str) and b.startswith("[NOTE: Please add a GEMINI_API_KEY"))]
+        sec_copy["bullets"] = clean_bullets
+        sanitized.append(sec_copy)
+    return sanitized
+
 def list_meetings_for_user(user):
     if use_mongodb:
         query = {}
         if user["role"] == "student":
-            query = {"$or": [{"participantIds": user["id"]}, {"participantIds": []}]}
+            query = {"participantIds": user["id"]}
         else:
             query = {"hostId": user["id"]}
         meetings = list(mongo_db.meetings.find(query))
         for m in meetings:
             m["_id"] = str(m["_id"])
+            if "structuredContent" in m:
+                m["structuredContent"] = sanitize_note_sections(m["structuredContent"])
         return meetings
     else:
         db = read_json_db()
         meetings_list = []
         for m in db["meetings"].values():
             if user["role"] == "student":
-                if user["id"] in m.get("participantIds", []) or not m.get("participantIds"):
-                    meetings_list.append(m)
+                if user["id"] in m.get("participantIds", []):
+                    m_copy = dict(m)
+                    if "structuredContent" in m_copy:
+                        m_copy["structuredContent"] = sanitize_note_sections(m_copy["structuredContent"])
+                    meetings_list.append(m_copy)
             else:
                 if m["hostId"] == user["id"]:
-                    meetings_list.append(m)
+                    m_copy = dict(m)
+                    if "structuredContent" in m_copy:
+                        m_copy["structuredContent"] = sanitize_note_sections(m_copy["structuredContent"])
+                    meetings_list.append(m_copy)
         return meetings_list
 
 def save_meeting(meeting):
@@ -178,18 +277,22 @@ def get_meeting(meeting_id):
         m = mongo_db.meetings.find_one({"id": meeting_id})
         if m:
             m["_id"] = str(m["_id"])
-        return m
     else:
-        return read_json_db()["meetings"].get(meeting_id)
+        m = read_json_db()["meetings"].get(meeting_id)
+    if m and "structuredContent" in m:
+        m["structuredContent"] = sanitize_note_sections(m["structuredContent"])
+    return m
 
 def get_notes(meeting_id):
     if use_mongodb:
         n = mongo_db.notes.find_one({"meetingId": meeting_id})
         if n:
             n["_id"] = str(n["_id"])
-        return n
     else:
-        return read_json_db()["notes"].get(meeting_id)
+        n = read_json_db()["notes"].get(meeting_id)
+    if n and "structuredContent" in n:
+        n["structuredContent"] = sanitize_note_sections(n["structuredContent"])
+    return n
 
 def save_notes(notes_doc):
     # Always fully replace existing notes — never keep stale content
@@ -293,8 +396,19 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
 
+        # GET /api/status
+        if path == "/api/status":
+            if mongodb_configured and not use_mongodb:
+                check_mongodb_connection()
+            return self.send_json({
+                "use_mongodb": use_mongodb,
+                "mongodb_configured": mongodb_configured,
+                "database_name": MONGO_DB_NAME if use_mongodb else "local_json",
+                "error_message": connection_error_message
+            })
+
         # GET /api/auth/me
-        if path == "/api/auth/me":
+        elif path == "/api/auth/me":
             user = self.authenticate()
             if not user:
                 return self.send_error_json("Session expired or invalid token", 401)
@@ -431,6 +545,8 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
 
         # POST /api/auth/register
         if path == "/api/auth/register":
+            if not ensure_db_ready(self):
+                return
             name = data.get("name")
             email = data.get("email", "").lower()
             password = data.get("password")
@@ -466,6 +582,8 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
 
         # POST /api/auth/login
         elif path == "/api/auth/login":
+            if not ensure_db_ready(self):
+                return
             email = data.get("email", "").lower()
             password = data.get("password")
             
@@ -582,25 +700,20 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
             delete_notes(meeting_id)
             
             # Use Gemini to transcribe the audio if available
-            if GEMINI_API_KEY and audio_bytes:
+            current_gemini_key = get_gemini_api_key()
+            if current_gemini_key and audio_bytes:
                 try:
-                    import google.generativeai as genai
-                    genai.configure(api_key=GEMINI_API_KEY)
-                    model = genai.GenerativeModel("gemini-1.5-flash")
-                    
                     audio_part = {
                         "mime_type": "audio/webm",
                         "data": audio_bytes
                     }
-                    
                     transcribe_prompt = (
                         "Listen to this classroom lecture audio. "
                         "Transcribe the spoken content verbatim. Do not summarize. "
                         "Return ONLY the verbatim transcript text."
                     )
                     print("[Gemini] Transcribing audio recording fallback...")
-                    transcribe_res = model.generate_content([transcribe_prompt, audio_part])
-                    audio_transcript = transcribe_res.text.strip()
+                    audio_transcript = call_gemini_with_fallback([transcribe_prompt, audio_part])
                     if audio_transcript:
                         print(f"[Gemini] Verbatim audio transcript: {audio_transcript}")
                         transcript_text = audio_transcript
@@ -609,12 +722,9 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
 
             # Build notes strictly from what was spoken in THIS meeting only
             if transcript_text:
-                if GEMINI_API_KEY:
+                current_gemini_key = get_gemini_api_key()
+                if current_gemini_key:
                     try:
-                        import google.generativeai as genai
-                        genai.configure(api_key=GEMINI_API_KEY)
-                        model = genai.GenerativeModel("gemini-1.5-flash")
-                        
                         prompt = f"""
                         You are an AI Class Assistant. Analyze this class transcript and generate structured, comprehensive study notes for the students. 
                         Focus ONLY on educational/academic content related to the subject taught (e.g. numpy, python libraries, data structures, data analysis). 
@@ -637,8 +747,7 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
                           ]
                         }}
                         """
-                        response = model.generate_content(prompt)
-                        response_text = response.text
+                        response_text = call_gemini_with_fallback(prompt)
                         
                         # Parse JSON from response
                         json_match = re.search(r"```json\s*(.*?)\s*```", response_text, re.DOTALL)
@@ -648,6 +757,7 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
                             data = json.loads(response_text.strip())
                             
                         sections = data.get("sections", [])
+
                     except Exception as e:
                         print(f"[Gemini] Failed to generate AI notes: {e}. Falling back to text extraction.")
                         # Fallback to simple extraction
@@ -684,7 +794,7 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
                             "bullets": chunk
                         })
                     
-                    if sections:
+                    if sections and not get_gemini_api_key():
                         sections[0]["bullets"].insert(0, "[NOTE: Please add a GEMINI_API_KEY in backend/.env to get high-quality AI-generated study notes.]")
                 
                 if not sections:

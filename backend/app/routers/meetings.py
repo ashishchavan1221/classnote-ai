@@ -74,8 +74,8 @@ async def list_meetings(current_user: dict = Depends(get_current_user)):
             # Query based on role
             query = {}
             if user_role == "student":
-                # Students can see meetings where they are in participantIds or if the list is empty (public institution sessions)
-                query = {"$or": [{"participantIds": user_id}, {"participantIds": []}]}
+                # Students can see meetings where they are in participantIds
+                query = {"participantIds": user_id}
             else:
                 # Teachers see meetings they host
                 query = {"hostId": user_id}
@@ -91,7 +91,7 @@ async def list_meetings(current_user: dict = Depends(get_current_user)):
     if not meetings_list:
         for m in IN_MEMORY_MEETINGS.values():
             if user_role == "student":
-                if user_id in m["participantIds"] or not m["participantIds"]:
+                if user_id in m["participantIds"]:
                     meetings_list.append(m)
             else:
                 if m["hostId"] == user_id:
