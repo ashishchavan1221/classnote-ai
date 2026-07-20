@@ -1,6 +1,7 @@
 import os
 import logging
 import requests
+from typing import List
 try:
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors

@@ -470,7 +470,20 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
             password = data.get("password")
             
             user = get_user_by_email(email)
-            if not user or user["password"] != password:
+            password_correct = False
+            if user:
+                stored_password = user.get("password")
+                if stored_password is not None:
+                    password_correct = (stored_password == password)
+                else:
+                    stored_hash = user.get("passwordHash")
+                    if stored_hash is not None:
+                        try:
+                            from app.core.security import verify_password
+                            password_correct = verify_password(password, stored_hash)
+                        except Exception:
+                            password_correct = False
+            if not user or not password_correct:
                 return self.send_error_json("Incorrect email or password", 401)
                 
             return self.send_json({
