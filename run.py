@@ -45,7 +45,15 @@ if __name__ == "__main__":
     frontend_dir = os.path.join(os.getcwd(), "frontend")
     
     # Python executable command
-    python_exec = sys.executable
+    venv_python_win = os.path.join(backend_dir, "venv", "Scripts", "python.exe")
+    venv_python_unix = os.path.join(backend_dir, "venv", "bin", "python")
+    if os.path.exists(venv_python_win):
+        python_exec = venv_python_win
+    elif os.path.exists(venv_python_unix):
+        python_exec = venv_python_unix
+    else:
+        python_exec = sys.executable
+        
     backend_cmd = f'"{python_exec}" app_pure.py'
     frontend_cmd = "npm run dev"
     
