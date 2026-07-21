@@ -235,7 +235,14 @@ def list_meetings_for_user(user):
     if use_mongodb:
         query = {}
         if user["role"] == "student":
-            query = {"participantIds": user["id"]}
+            query = {
+                "$or": [
+                    {"participantIds": user["id"]},
+                    {"participantIds": {"$size": 0}},
+                    {"participantIds": {"$exists": False}},
+                    {"participantIds": None}
+                ]
+            }
         else:
             query = {"hostId": user["id"]}
         meetings = list(mongo_db.meetings.find(query))
@@ -249,7 +256,8 @@ def list_meetings_for_user(user):
         meetings_list = []
         for m in db["meetings"].values():
             if user["role"] == "student":
-                if user["id"] in m.get("participantIds", []):
+                p_ids = m.get("participantIds", [])
+                if not p_ids or user["id"] in p_ids:
                     m_copy = dict(m)
                     if "structuredContent" in m_copy:
                         m_copy["structuredContent"] = sanitize_note_sections(m_copy["structuredContent"])
@@ -629,9 +637,10 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
             # Resolve participant IDs
             participant_ids = []
             for email in participant_emails:
-                u = get_user_by_email(email)
-                if u:
-                    participant_ids.append(u["id"])
+                if email and isinstance(email, str):
+                    u = get_user_by_email(email.strip().lower())
+                    if u and u["id"] not in participant_ids:
+                        participant_ids.append(u["id"])
 
             meeting = {
                 "id": meeting_id,
