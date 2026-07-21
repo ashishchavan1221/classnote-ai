@@ -86,9 +86,20 @@ def check_mongodb_connection():
     global mongo_client, mongo_db, use_mongodb, connection_error_message
     try:
         if not mongo_client:
-            mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=3000)
-        # Simple check to see if database connection is alive
-        mongo_client.admin.command('ping')
+            client_kwargs = {"serverSelectionTimeoutMS": 4000}
+            try:
+                import certifi
+                client_kwargs["tlsCAFile"] = certifi.where()
+            except Exception:
+                client_kwargs["tlsAllowInvalidCertificates"] = True
+            
+            try:
+                mongo_client = MongoClient(MONGODB_URI, **client_kwargs)
+                mongo_client.admin.command('ping')
+            except Exception:
+                mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=4000, tlsAllowInvalidCertificates=True)
+                mongo_client.admin.command('ping')
+
         mongo_db = mongo_client[MONGO_DB_NAME]
         use_mongodb = True
         connection_error_message = ""
@@ -235,14 +246,7 @@ def list_meetings_for_user(user):
     if use_mongodb:
         query = {}
         if user["role"] == "student":
-            query = {
-                "$or": [
-                    {"participantIds": user["id"]},
-                    {"participantIds": {"$size": 0}},
-                    {"participantIds": {"$exists": False}},
-                    {"participantIds": None}
-                ]
-            }
+            query = {}
         else:
             query = {"hostId": user["id"]}
         meetings = list(mongo_db.meetings.find(query))
@@ -256,12 +260,10 @@ def list_meetings_for_user(user):
         meetings_list = []
         for m in db["meetings"].values():
             if user["role"] == "student":
-                p_ids = m.get("participantIds", [])
-                if not p_ids or user["id"] in p_ids:
-                    m_copy = dict(m)
-                    if "structuredContent" in m_copy:
-                        m_copy["structuredContent"] = sanitize_note_sections(m_copy["structuredContent"])
-                    meetings_list.append(m_copy)
+                m_copy = dict(m)
+                if "structuredContent" in m_copy:
+                    m_copy["structuredContent"] = sanitize_note_sections(m_copy["structuredContent"])
+                meetings_list.append(m_copy)
             else:
                 if m["hostId"] == user["id"]:
                     m_copy = dict(m)

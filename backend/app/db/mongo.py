@@ -11,9 +11,19 @@ class MongoDBConnection:
     def connect(self):
         try:
             logger.info(f"Connecting to MongoDB at {settings.MONGODB_URI}...")
-            self.client = AsyncIOMotorClient(settings.MONGODB_URI, serverSelectionTimeoutMS=2000)
+            client_kwargs = {"serverSelectionTimeoutMS": 4000}
+            try:
+                import certifi
+                client_kwargs["tlsCAFile"] = certifi.where()
+            except Exception:
+                client_kwargs["tlsAllowInvalidCertificates"] = True
+
+            try:
+                self.client = AsyncIOMotorClient(settings.MONGODB_URI, **client_kwargs)
+            except Exception:
+                self.client = AsyncIOMotorClient(settings.MONGODB_URI, serverSelectionTimeoutMS=4000, tlsAllowInvalidCertificates=True)
+
             self.db = self.client[settings.MONGO_DB_NAME]
-            # Simple check connection (doesn't block)
             logger.info("MongoDB client wrapper initialized.")
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {e}")

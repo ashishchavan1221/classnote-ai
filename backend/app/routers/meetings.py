@@ -74,15 +74,8 @@ async def list_meetings(current_user: dict = Depends(get_current_user)):
             # Query based on role
             query = {}
             if user_role == "student":
-                # Students can see meetings where they are in participantIds or general sessions
-                query = {
-                    "$or": [
-                        {"participantIds": user_id},
-                        {"participantIds": {"$size": 0}},
-                        {"participantIds": {"$exists": False}},
-                        {"participantIds": None}
-                    ]
-                }
+                # Students can see all class sessions
+                query = {}
             else:
                 # Teachers see meetings they host
                 query = {"hostId": user_id}
@@ -98,9 +91,7 @@ async def list_meetings(current_user: dict = Depends(get_current_user)):
     if not meetings_list:
         for m in IN_MEMORY_MEETINGS.values():
             if user_role == "student":
-                p_ids = m.get("participantIds", [])
-                if not p_ids or user_id in p_ids:
-                    meetings_list.append(m)
+                meetings_list.append(m)
             else:
                 if m["hostId"] == user_id:
                     meetings_list.append(m)

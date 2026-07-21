@@ -961,13 +961,27 @@ const Dashboard = () => {
                     </td>
                     <td className="py-4 pr-2 text-right">
                       {m.status === "live" ? (
-                        <Link
-                          to={`/meeting/${m.id}`}
-                          className="inline-flex items-center space-x-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm"
-                        >
-                          <span>Join Session</span>
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
+                        <div className="flex justify-end items-center space-x-2">
+                          <Link
+                            to={`/meeting/${m.id}`}
+                            className="inline-flex items-center space-x-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm"
+                          >
+                            <span>Join Session</span>
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </Link>
+                          {m.meetingLink && (
+                            <a
+                              href={m.meetingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-2.5 py-2 rounded-lg inline-flex items-center space-x-1"
+                              title="Open Direct Video Call Link"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              <span>Call Link</span>
+                            </a>
+                          )}
+                        </div>
                       ) : m.status === "completed" ? (
                         <div className="flex justify-end items-center space-x-2">
                           {m.transcriptText && (
@@ -984,18 +998,39 @@ const Dashboard = () => {
                           </Link>
                         </div>
                       ) : (
-                        user?.role === "teacher" && (
-                          <button
-                            onClick={async () => {
-                              await api.startMeeting(m.id);
-                              loadData();
-                              navigate(`/meeting/${m.id}`);
-                            }}
-                            className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg"
+                        <div className="flex justify-end items-center space-x-2">
+                          {user?.role === "teacher" && (
+                            <button
+                              onClick={async () => {
+                                await api.startMeeting(m.id);
+                                loadData();
+                                navigate(`/meeting/${m.id}`);
+                              }}
+                              className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg"
+                            >
+                              Start Session
+                            </button>
+                          )}
+                          <Link
+                            to={`/meeting/${m.id}`}
+                            className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-lg"
                           >
-                            Start Session
-                          </button>
-                        )
+                            <span>Class Room</span>
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </Link>
+                          {m.meetingLink && (
+                            <a
+                              href={m.meetingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-2.5 py-2 rounded-lg inline-flex items-center space-x-1"
+                              title="Open Direct Video Call Link"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              <span>Call Link</span>
+                            </a>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
