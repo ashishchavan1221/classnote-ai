@@ -731,33 +731,51 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
                 except Exception as audio_err:
                     print(f"[Gemini] Audio transcription failed: {audio_err}")
 
-            # Build notes strictly from what was spoken in THIS meeting only
+            # Build notes and action items strictly from this meeting session
             if transcript_text:
                 current_gemini_key = get_gemini_api_key()
                 if current_gemini_key:
                     try:
+                        meeting_desc = meeting.get("description", "")
                         prompt = f"""
-                        You are an AI Class Assistant. Analyze this class transcript and generate structured, comprehensive study notes for the students. 
-                        Focus ONLY on educational/academic content related to the subject taught (e.g. numpy, python libraries, data structures, data analysis). 
-                        Discard any small talk, audio test chatter, or greetings.
+You are an expert Computer Science Professor and AI Study Note Generator.
+Your task is to generate high-quality, comprehensive, beautifully structured academic study notes for students based on the classroom lecture.
 
-                        Transcript:
-                        \"\"\"{transcript_text}\"\"\"
+Meeting Title: {meeting_title}
+Meeting Description: {meeting_desc}
 
-                        Your output MUST be a valid JSON object inside a ```json ``` code block matching this format:
-                        {{
-                          "sections": [
-                            {{
-                              "heading": "Section Heading",
-                              "bullets": [
-                                "Bullet point detailing the concepts discussed",
-                                "Technical details or code example if relevant"
-                              ],
-                              "diagramMermaid": "graph TD\\n  ... (optional Mermaid flowchart code if relevant)"
-                            }}
-                          ]
-                        }}
-                        """
+Spoken Lecture Transcript:
+\"\"\"{transcript_text}\"\"\"
+
+Instructions:
+1. Ignore casual greetings (e.g., "hello", "good afternoon"), mic checks, or audio chatter.
+2. Clean up speech recognition typos (e.g., if speech says "baby are going to learn", correct it to "Today we are learning").
+3. Generate detailed, highly informative study notes structured into multiple logical sections.
+4. Each section MUST have a clear, academic heading and multiple bullet points explaining concepts in depth (including technical definitions, code examples, or key rules where applicable).
+5. Include a valid Mermaid flowchart diagram in `diagramMermaid` for the core concept (e.g., `graph TD\\n  ...`).
+6. Also extract any action items or student assignments discussed into `action_items`.
+
+Your output MUST be a valid JSON object matching this exact schema inside a ```json ``` code block:
+{{
+  "sections": [
+    {{
+      "heading": "Detailed Section Heading",
+      "bullets": [
+        "In-depth explanation of core concept...",
+        "Technical detail, code snippet, or implementation rule..."
+      ],
+      "diagramMermaid": "graph TD\\n  A[Concept A] --> B[Concept B]"
+    }}
+  ],
+  "action_items": [
+    {{
+      "description": "Clear actionable task description",
+      "assigneeName": "Student Name",
+      "dueDateDaysFromNow": 5
+    }}
+  ]
+}}
+"""
                         response_text = call_gemini_with_fallback(prompt)
                         
                         # Parse JSON from response
@@ -768,40 +786,48 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
                             data = json.loads(response_text.strip())
                             
                         sections = data.get("sections", [])
+                        
+                        # Save action items to task board
+                        action_items = data.get("action_items", [])
+                        for item in action_items:
+                            t_id = str(uuid.uuid4())
+                            days = item.get("dueDateDaysFromNow", 5)
+                            due = (datetime.datetime.now() + datetime.timedelta(days=days)).isoformat()
+                            task_doc = {
+                                "id": t_id,
+                                "meetingId": meeting_id,
+                                "meetingTitle": meeting_title,
+                                "description": item.get("description", "Class Action Item"),
+                                "assigneeName": item.get("assigneeName", "Student"),
+                                "status": "pending",
+                                "dueDate": due,
+                                "createdAt": datetime.datetime.now().isoformat()
+                            }
+                            save_task(task_doc)
 
                     except Exception as e:
                         print(f"[Gemini] Failed to generate AI notes: {e}. Falling back to text extraction.")
-                        # Fallback to simple extraction
-                        sentences = [s.strip() for s in re.split(r'[.!?]+', transcript_text) if s.strip() and len(s.strip()) > 8]
+                        sentences = [s.strip() for s in re.split(r'[\.\!\?\n]+', transcript_text) if s.strip() and len(s.strip()) > 5]
+                        if not sentences:
+                            sentences = [transcript_text]
                         sections = []
                         chunk_size = 3
-                        for i in range(0, max(len(sentences), 1), chunk_size):
+                        for i in range(0, len(sentences), chunk_size):
                             chunk = sentences[i:i + chunk_size]
-                            if not chunk:
-                                break
-                            first = chunk[0]
-                            words = first.split()
-                            heading_words = [w for w in words if len(w) > 3][:4]
-                            heading = " ".join(heading_words).title() if heading_words else f"Topic {i // chunk_size + 1}"
                             sections.append({
-                                "heading": heading,
+                                "heading": f"Topic {i // chunk_size + 1}: {meeting_title}",
                                 "bullets": chunk
                             })
                 else:
-                    # No Gemini key — fallback to simple text extraction
-                    sentences = [s.strip() for s in re.split(r'[.!?]+', transcript_text) if s.strip() and len(s.strip()) > 8]
+                    sentences = [s.strip() for s in re.split(r'[\.\!\?\n]+', transcript_text) if s.strip() and len(s.strip()) > 5]
+                    if not sentences:
+                        sentences = [transcript_text]
                     sections = []
                     chunk_size = 3
-                    for i in range(0, max(len(sentences), 1), chunk_size):
+                    for i in range(0, len(sentences), chunk_size):
                         chunk = sentences[i:i + chunk_size]
-                        if not chunk:
-                            break
-                        first = chunk[0]
-                        words = first.split()
-                        heading_words = [w for w in words if len(w) > 3][:4]
-                        heading = " ".join(heading_words).title() if heading_words else f"Topic {i // chunk_size + 1}"
                         sections.append({
-                            "heading": heading,
+                            "heading": f"Topic {i // chunk_size + 1}: {meeting_title}",
                             "bullets": chunk
                         })
                     
@@ -814,7 +840,6 @@ class PureAPIRequestHandler(BaseHTTPRequestHandler):
                         "bullets": [transcript_text[:400]]
                     }]
             else:
-                # No speech captured — show a helpful message
                 sections = [
                     {
                         "heading": f"Session: {meeting_title}",

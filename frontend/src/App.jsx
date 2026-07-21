@@ -1218,8 +1218,13 @@ const MeetingRoom = () => {
          setSpeechError("Speech recognition service not allowed.");
          setIsRecording(false);
          isRecordingRef.current = false;
-       } else if (e.error === "no-speech" || e.error === "aborted") {
-         // Silent error or script-initiated stop, ignore
+       } else if (e.error === "no-speech" || e.error === "aborted" || e.error === "network") {
+         setSpeechError(null);
+         if (isRecordingRef.current) {
+           setTimeout(() => {
+             try { recognition.start(); } catch (_) {}
+           }, 1000);
+         }
        } else {
          setSpeechError(`Microphone issue detected: ${e.error}`);
        }

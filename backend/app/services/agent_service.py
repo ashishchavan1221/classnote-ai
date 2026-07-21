@@ -169,15 +169,25 @@ async def run_agent_notes_tasks(meeting_id: str, transcript: str, rag_context: s
 
     # LLM execution (Gemini or OpenAI)
     prompt = f"""
-    You are an AI Class Assistant. Analyze this class transcript and past class context.
-    Generate a detailed markdown study note for the students and extract a list of action items.
-    
-    Transcript:
+    You are an expert Computer Science Professor and AI Study Note Generator.
+    Your task is to generate high-quality, comprehensive, beautifully structured academic study notes for students based on the classroom lecture.
+
+    Meeting Title: {meeting_title}
+
+    Spoken Lecture Transcript:
     \"\"\"{transcript}\"\"\"
-    
-    Past Context:
+
+    Past Class Context:
     \"\"\"{rag_context}\"\"\"
-    
+
+    Instructions:
+    1. Ignore casual greetings (e.g., "hello", "good afternoon"), mic checks, or audio chatter.
+    2. Clean up speech recognition typos (e.g., if speech says "baby are going to learn", correct it to "Today we are learning").
+    3. Generate detailed, highly informative study notes structured into multiple logical sections.
+    4. Each section MUST have a clear, academic heading and multiple bullet points explaining concepts in depth (including technical definitions, code examples, or key rules where applicable).
+    5. Include a valid Mermaid flowchart diagram in `diagramMermaid` for the core concept (e.g., `graph TD\\n  ...`).
+    6. Also extract any action items or student assignments discussed into `action_items`.
+
     Your output MUST be a JSON object inside a ```json ``` block with this exact format:
     {{
       "sections": [
@@ -187,7 +197,7 @@ async def run_agent_notes_tasks(meeting_id: str, transcript: str, rag_context: s
             "Bullet point 1 detailing concepts discussed",
             "Bullet point 2 detailing technical aspects"
           ],
-          "diagramMermaid": "graph TD\\n  ... (optional Mermaid flowchart code if relevant to the concepts)"
+          "diagramMermaid": "graph TD\\n  A[Concept A] --> B[Concept B]"
         }}
       ],
       "action_items": [
@@ -198,8 +208,6 @@ async def run_agent_notes_tasks(meeting_id: str, transcript: str, rag_context: s
         }}
       ]
     }}
-    
-    Make the notes structured, comprehensive, and clear. If a database sequence, network packet flow, or setup process is mentioned, write a beautiful Mermaid graph.
     """
     
     try:
