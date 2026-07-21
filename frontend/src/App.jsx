@@ -1311,21 +1311,27 @@ const MeetingRoom = () => {
 
     const fullTranscript = accumulatedTranscriptRef.current.trim();
 
-    // Convert recorded audio chunks to base64 for fallback transcription on backend
+    // Convert recorded audio chunks with a safety timeout so it never hangs
     let audioBase64 = "";
     if (audioChunksRef.current && audioChunksRef.current.length > 0) {
       try {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        audioBase64 = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64data = reader.result.split(',')[1];
-            resolve(base64data);
-          };
-          reader.readAsDataURL(audioBlob);
-        });
+        if (audioBlob.size < 8 * 1024 * 1024) {
+          audioBase64 = await Promise.race([
+            new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64data = reader.result ? reader.result.split(',')[1] || "" : "";
+                resolve(base64data);
+              };
+              reader.onerror = () => resolve("");
+              reader.readAsDataURL(audioBlob);
+            }),
+            new Promise((resolve) => setTimeout(() => resolve(""), 2000))
+          ]);
+        }
       } catch (err) {
-        console.error("Failed to convert audio to base64:", err);
+        console.error("Audio base64 conversion skipped:", err);
       }
     }
 
@@ -1346,16 +1352,21 @@ const MeetingRoom = () => {
       } else {
         clearInterval(interval);
       }
-    }, 2000);
+    }, 1500);
 
     try {
       await api.endMeeting(id, fullTranscript, audioBase64);
+    } catch (e) {
+      console.warn("End meeting primary payload failed, retrying without audio payload...", e);
+      try {
+        await api.endMeeting(id, fullTranscript, "");
+      } catch (retryErr) {
+        console.error("End meeting retry error:", retryErr);
+      }
+    } finally {
       clearInterval(interval);
       setProcessing(false);
       navigate(`/notes/${id}`);
-    } catch (e) {
-      clearInterval(interval);
-      setProcessing(false);
     }
   };
 
